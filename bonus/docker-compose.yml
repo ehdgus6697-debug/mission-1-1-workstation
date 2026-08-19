@@ -1,0 +1,27 @@
+# 보너스 1, 2, 3, 4) Docker Compose 기초 + 멀티 컨테이너 + 운영 명령 + 환경 변수
+#
+# 사용법 (이 파일이 있는 디렉토리에서):
+#   docker compose up -d      # 실행
+#   docker compose ps         # 상태 확인
+#   docker compose logs -f    # 로그 확인
+#   docker compose down       # 종료 및 정리
+#
+# web 서비스는 ../app 의 Dockerfile로 빌드하고, redis를 보조 서비스로 붙여
+# 컨테이너 간 네트워크 통신(서비스 디스커버리)을 확인하는 용도입니다.
+
+services:
+  web:
+    build:
+      context: ../app
+    ports:
+      - "8080:5000"
+    environment:
+      - PORT=5000
+      - CACHE_HOST=redis   # 서비스명(redis)으로 컨테이너 간 통신 가능함을 보여주는 용도
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    expose:
+      - "6379"
