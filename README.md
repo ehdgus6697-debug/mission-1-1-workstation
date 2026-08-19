@@ -68,7 +68,8 @@ mission-1-1-workstation/
 ├── docs/screenshots/
 │   ├── port-8080.png
 │   ├── port-8081.png
-│   └── custom-nginx-8090.png
+│   ├── custom-nginx-8090.png
+│   └── vscode-github.png
 ├── practice/memo.txt
 ├── perm_test.sh
 └── perm_dir/
@@ -88,7 +89,7 @@ mission-1-1-workstation/
 - [x] 바인드 마운트의 호스트 변경 반영 검증
 - [x] Docker Volume 영속성 검증
 - [x] Git 사용자 정보와 기본 브랜치 설정
-- [ ] VS Code에서 GitHub 저장소 연동 확인
+- [x] VS Code에서 GitHub 저장소 연동 확인
 - [x] 실제 트러블슈팅 2건 기록
 - [ ] (보너스) Docker Compose 멀티 컨테이너 실행
 
@@ -303,7 +304,9 @@ main
 
 - **Git**: 내 컴퓨터에서 파일 변경 이력, 브랜치, 커밋을 관리하는 버전 관리 시스템이다.
 - **GitHub**: Git 저장소를 원격으로 보관하고 다른 사람과 Pull Request, Issue 등으로 협업하는 서비스다.
-- VS Code/GitHub 연동 증거는 원격 저장소 연결 후 [`docs/screenshots/vscode-github.png`](docs/screenshots/vscode-github.png)에 추가한다.
+- **원격 저장소**: [ehdgus6697-debug/mission-1-1-workstation](https://github.com/ehdgus6697-debug/mission-1-1-workstation) (비공개로 생성)
+- VS Code Source Control에서 `main`, `origin/main`, 변경 내용 없음과 동기화 상태를 확인했다.
+- 연동 증거: ![VS Code GitHub 연동 화면](docs/screenshots/vscode-github.png)
 
 ## 14) 트러블슈팅
 
