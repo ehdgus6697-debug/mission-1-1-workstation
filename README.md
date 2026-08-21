@@ -91,6 +91,9 @@ mission-1-1-workstation/
 - [x] Git 사용자 정보와 기본 브랜치 설정
 - [x] VS Code에서 GitHub 저장소 연동 확인
 - [x] 실제 트러블슈팅 2건 기록
+- [x] 이미지·컨테이너 차이(불변성, 빌드/실행/변경) 사례 기반 설명
+- [x] 포트 충돌 진단 절차(lsof/netstat/ps) 기록
+- [x] Docker Volume 백업·복원 절차 기록
 - [ ] (보너스) Docker Compose 멀티 컨테이너 실행
 
 ## 4) 터미널 기본 조작
@@ -217,6 +220,48 @@ $ curl http://localhost:8080/healthz
 
 포트 매핑 `8080:5000`은 `호스트 포트:컨테이너 포트`다. 컨테이너는 격리된 네트워크를 사용하므로 `-p`로 연결하지 않으면 Mac 브라우저에서 컨테이너의 5000번 포트에 직접 접근할 수 없다.
 
+### 9-1) 포트 충돌 진단 절차
+
+포트 매핑(`-p <host>:<container>`) 시 호스트 포트가 이미 사용 중이면 아래와 같은 에러가 발생한다.
+
+```text
+Error response from daemon: driver failed programming external connectivity on endpoint ...:
+Bind for 0.0.0.0:8080 failed: port is already allocated
+```
+
+이럴 때는 다음 순서로 원인을 진단한다.
+
+1. **Docker 컨테이너가 이미 그 포트를 쓰고 있는지 먼저 확인한다(가장 흔한 원인).**
+
+   ```bash
+   $ docker ps --filter "publish=8080"
+   CONTAINER ID   IMAGE                 COMMAND   ...  PORTS
+   abcdef123456   codyssey-my-web:1.0   ...       ...  0.0.0.0:8080->5000/tcp
+   ```
+
+   다른 미션 컨테이너가 이미 그 포트를 점유 중이면 `docker stop <이름>`으로 정리하거나, 다른 호스트 포트(예: `-p 8083:5000`)로 다시 실행한다.
+
+2. **어떤 프로세스가 포트를 점유 중인지 macOS에서 확인한다.**
+
+   ```bash
+   $ lsof -nP -iTCP:8080 -sTCP:LISTEN
+   COMMAND     PID   USER       FD   TYPE   NAME
+   com.docke  1234  hadongtak   50u  IPv4   *:8080 (LISTEN)
+
+   $ netstat -anv | grep 8080
+   tcp4  0  0  *.8080  *.*  LISTEN
+   ```
+
+   (리눅스 환경이라면 `ss -ltnp | grep 8080`이 `netstat`보다 빠르고 최신 배포판의 기본 도구다.)
+
+3. **PID로 프로세스 이름을 확인해 Docker/OrbStack인지, 로컬에서 직접 띄운 다른 서버인지 구분한다.**
+
+   ```bash
+   $ ps -p 1234 -o pid,comm=
+   ```
+
+4. **해결**: 점유 중인 컨테이너나 프로세스를 정리(`docker stop`, `kill`)하거나, 호스트 포트를 바꿔서(`-p 8083:5000`) 다시 실행한다.
+
 ## 10) nginx 기반 커스텀 이미지
 
 - 베이스 이미지: `nginx:alpine`
@@ -235,6 +280,42 @@ $ curl http://localhost:8090
 ```
 
 접속 증거: ![Custom nginx 8090 접속 결과](docs/screenshots/custom-nginx-8090.png)
+
+### 10-1) 이미지와 컨테이너의 차이 (이미지 불변성 vs 컨테이너 실행/변경)
+
+- **이미지(Image)**: Dockerfile을 빌드해서 만든 **읽기 전용 템플릿**이다. 빌드가 끝나면 내용이 고정되고, `docker build`를 다시 실행하지 않는 한 절대 바뀌지 않는다.
+- **컨테이너(Container)**: 이미지를 실행한 **하나의 인스턴스**다. 컨테이너가 실행되면 이미지 위에 **쓰기 가능한 레이어(writable layer)**가 하나 얹히고, 컨테이너 안에서 파일을 만들거나 지우는 모든 변경은 이 레이어에만 기록된다. 컨테이너를 삭제하면 이 레이어도 함께 사라지며, 원본 이미지는 전혀 영향을 받지 않는다.
+
+**사례 1 — 같은 이미지에서 나온 독립된 두 컨테이너**
+
+섹션 9에서 `codyssey-my-web:1.0` 이미지 하나로 `mission-web-8080`, `mission-web-8081` 두 컨테이너를 각각 실행했다. `docker images`에는 `codyssey-my-web:1.0`이 1개만 있었지만, 두 컨테이너는 포트만 다를 뿐 완전히 독립적으로 동작했다. 이미지는 "실행 가능한 원본 하나"이고, 컨테이너는 그 원본을 복제하지 않고 참조해서 만든 실행 인스턴스라는 것을 보여준다.
+
+**사례 2 — 컨테이너 내부 변경은 이미지에 반영되지 않는다**
+
+```bash
+$ docker run -d --name mission-image-test codyssey-my-web:1.0
+a17ff229df12715f37c420ac7d9d07b7a71599b3da57cb9d14cd31c9107ea0b7
+
+$ docker exec mission-image-test sh -c "echo container-only-change > /app/local_note.txt && cat /app/local_note.txt"
+container-only-change
+
+$ docker rm -f mission-image-test
+mission-image-test
+
+$ docker run --rm codyssey-my-web:1.0 cat /app/local_note.txt
+cat: /app/local_note.txt: No such file or directory
+```
+
+컨테이너 안에서 만든 `local_note.txt`는 그 컨테이너의 쓰기 가능한 레이어에만 존재했다. 컨테이너를 삭제하고 같은 이미지로 새 컨테이너를 실행하면 그 파일이 없다 — 이미지(`codyssey-my-web:1.0`) 자체는 전혀 바뀌지 않았다는 뜻이다. 이미지를 실제로 바꾸려면 Dockerfile을 고치고 `docker build`를 다시 실행해야 한다(섹션 14의 nginx 403 사례에서 `RUN chmod`를 추가하고 재빌드한 것이 그 예다).
+
+**정리**
+
+| 구분 | 이미지 | 컨테이너 |
+|---|---|---|
+| 성격 | 읽기 전용 템플릿(레이어 스택) | 이미지 + 쓰기 가능한 레이어 |
+| 언제 바뀌나 | `docker build`를 다시 실행할 때만 | 실행 중 언제든(파일 생성·수정·삭제) |
+| 삭제 시 | 다른 컨테이너에 영향 없음(원본 이미지 유지) | 그 컨테이너의 변경 내용만 사라짐 |
+| 재사용 | 여러 컨테이너가 동시에 참조 가능(사례 1) | 서로 격리되어 독립적으로 실행 |
 
 ## 11) 바인드 마운트 변경 반영
 
@@ -288,6 +369,41 @@ codyssey-volume-persisted
 
 - **바인드 마운트**: 사용자가 지정한 호스트 경로를 직접 연결한다. 파일 위치가 눈에 보이지만 호스트 경로에 의존한다.
 - **Docker Volume**: Docker가 관리하는 저장소다. 컨테이너 생명주기와 분리되어 재사용과 이식이 쉽다.
+
+### 12-1) Docker Volume 백업/복원
+
+Volume은 컨테이너를 삭제해도 살아남지만(위 검증 참고), Volume 자체를 실수로 지우거나(`docker volume rm`) 다른 컴퓨터로 옮길 때는 데이터가 사라질 수 있다. 그래서 별도 백업·복원 절차가 필요하다.
+
+**백업 — 임시 컨테이너로 Volume 내용을 tar로 호스트에 저장**
+
+```bash
+$ mkdir -p ~/Desktop/codyssey/mission-1-1-workstation/backup
+$ docker run --rm \
+    -v codyssey-mission-data:/data \
+    -v ~/Desktop/codyssey/mission-1-1-workstation/backup:/backup \
+    ubuntu tar czf /backup/codyssey-mission-data.tar.gz -C /data .
+# (정상 종료, 별도 출력 없음 — backup/codyssey-mission-data.tar.gz 생성됨)
+```
+
+**복원 — 새(또는 같은) Volume에 tar 압축 해제 후 검증**
+
+```bash
+$ docker volume create codyssey-mission-data-restored
+codyssey-mission-data-restored
+
+$ docker run --rm \
+    -v codyssey-mission-data-restored:/data \
+    -v ~/Desktop/codyssey/mission-1-1-workstation/backup:/backup \
+    ubuntu tar xzf /backup/codyssey-mission-data.tar.gz -C /data
+# (정상 종료, 별도 출력 없음)
+
+$ docker run --rm -v codyssey-mission-data-restored:/data ubuntu cat /data/hello.txt
+codyssey-volume-persisted
+```
+
+백업 tar를 새 Volume(`codyssey-mission-data-restored`)에 복원한 뒤 원본과 같은 내용(`codyssey-volume-persisted`)이 나온 것을 확인했다 — 백업/복원 절차가 실제로 동작함을 검증했다.
+
+**바인드 마운트의 경우**: 호스트 경로(`mount-demo/`)가 곧 원본 파일이므로 Volume처럼 별도 컨테이너를 거칠 필요가 없다. 일반 파일처럼 `cp -r mount-demo mount-demo-backup`이나 `rsync`, 또는 Git 커밋으로 백업하면 된다.
 
 ## 13) Git 및 GitHub 연동
 
