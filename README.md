@@ -94,6 +94,7 @@ mission-1-1-workstation/
 - [x] 이미지·컨테이너 차이(불변성, 빌드/실행/변경) 사례 기반 설명
 - [x] 포트 충돌 진단 절차(lsof/netstat/ps) 기록
 - [x] Docker Volume 백업·복원 절차 기록
+- [x] git push 실행 증거(로그/타임스탬프) 기록
 - [ ] (보너스) Docker Compose 멀티 컨테이너 실행
 
 ## 4) 터미널 기본 조작
@@ -423,6 +424,21 @@ main
 - **원격 저장소**: [ehdgus6697-debug/mission-1-1-workstation](https://github.com/ehdgus6697-debug/mission-1-1-workstation) (비공개로 생성)
 - VS Code Source Control에서 `main`, `origin/main`, 변경 내용 없음과 동기화 상태를 확인했다.
 - 연동 증거: ![VS Code GitHub 연동 화면](docs/screenshots/vscode-github.png)
+
+### 13-1) git push 실행 증거
+
+```bash
+$ git log --oneline -5
+ae2c520 (HEAD -> main, origin/main) docs: 포트 매핑 스크린샷 재촬영 (주소창 포함, 8080/8081/8090)
+e8b5c0c docs: FAIL #12/16/17 보완 - 이미지·컨테이너 차이, 포트 진단, 볼륨 백업/복원
+1d83f23 Document verified GitHub and VS Code integration
+c59126e Complete Codyssey mission 1-1 workstation setup
+
+$ git push
+Everything up-to-date
+```
+
+`HEAD -> main`과 `origin/main`이 같은 커밋(`ae2c520`)을 가리키고, `git push` 결과가 `Everything up-to-date`로 나온 것은 로컬 `main` 브랜치와 원격 `origin/main`이 완전히 동기화되어 있다는 뜻이다. 즉 지금까지의 모든 커밋(초기 세팅부터 README 보완, 스크린샷 재촬영까지)이 실제로 `https://github.com/ehdgus6697-debug/mission-1-1-workstation`에 push되어 있음을 확인했다.
 
 ## 14) 트러블슈팅
 
